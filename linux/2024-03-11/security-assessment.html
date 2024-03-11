@@ -1,0 +1,579 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>Assessing security vulnerabilities &#8212; The Linux Kernel  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Documentation for distributions" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/logo.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="index.html">The Linux Kernel</a></h1>
+
+
+
+<p class="blurb">6.8.0</p>
+
+
+
+
+
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script><!-- SPDX-License-Identifier: GPL-2.0 -->
+
+<p>
+<h3 class="kernel-toc-contents">Contents</h3>
+<input type="checkbox" class="kernel-toc-toggle" id = "kernel-toc-toggle" checked>
+<label class="kernel-toc-title" for="kernel-toc-toggle"></label>
+
+<div class="kerneltoc" id="kerneltoc">
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Assessing security vulnerabilities</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#what-is-a-vulnerability">What is a vulnerability?</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#common-assessment-scenarios">Common assessment scenarios</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#latent-vulnerabilities">Latent vulnerabilities</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#exploitability-and-unknowns">Exploitability and unknowns</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#types-of-bugs">Types of bugs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mitigations-and-hardening">Mitigations and hardening</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cves-and-cvss-scores-for-the-kernel">CVEs and CVSS scores for the kernel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reachability-analysis">Reachability analysis</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#user-namespaces">User namespaces</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#futher-reading">Futher reading</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+
+<script type="text/javascript"> <!--
+  var sbar = document.getElementsByClassName("sphinxsidebar")[0];
+  let currents = document.getElementsByClassName("current")
+  if (currents.length) {
+    sbar.scrollTop = currents[currents.length - 1].offsetTop;
+  }
+  --> </script>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/security-assessment.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <!-- SPDX-License-Identifier: GPL-2.0 -->
+<!-- Copyright © 2023, Oracle and/or its affiliates. -->
+
+
+<section id="assessing-security-vulnerabilities">
+<h1>Assessing security vulnerabilities<a class="headerlink" href="#assessing-security-vulnerabilities" title="Permalink to this headline">¶</a></h1>
+<dl class="field-list simple">
+<dt class="field-odd">Author</dt>
+<dd class="field-odd"><p>Vegard Nossum &lt;<a class="reference external" href="mailto:vegard&#46;nossum&#37;&#52;&#48;oracle&#46;com">vegard<span>&#46;</span>nossum<span>&#64;</span>oracle<span>&#46;</span>com</a>&gt;</p>
+</dd>
+</dl>
+<p>This document is intended for distributions and others who want to assess
+the severity of the bugs fixed by Linux kernel patches.</p>
+<p>We could consider <em>everything</em> a security issue until proven otherwise, or we
+could consider <em>nothing</em> a security issue until proven otherwise. Neither of
+these approaches are useful in practice. Security assessment is therefore
+partly an exercise in finding the middle ground. This guide attempts to make
+reasonable tradeoffs in order to maximize the utility of security assessments.</p>
+<p>Exploitability also depends highly on the context, so we make a distinction
+between a general worst-case assessment and context-specific assessments.</p>
+<p>This is NOT an exploitation guide.</p>
+<div class="contents local topic" id="table-of-contents">
+<p class="topic-title">Table of contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#what-is-a-vulnerability" id="id2">What is a vulnerability?</a></p>
+<ul>
+<li><p><a class="reference internal" href="#common-assessment-scenarios" id="id3">Common assessment scenarios</a></p></li>
+<li><p><a class="reference internal" href="#latent-vulnerabilities" id="id4">Latent vulnerabilities</a></p></li>
+<li><p><a class="reference internal" href="#exploitability-and-unknowns" id="id5">Exploitability and unknowns</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#types-of-bugs" id="id6">Types of bugs</a></p></li>
+<li><p><a class="reference internal" href="#mitigations-and-hardening" id="id7">Mitigations and hardening</a></p></li>
+<li><p><a class="reference internal" href="#cves-and-cvss-scores-for-the-kernel" id="id8">CVEs and CVSS scores for the kernel</a></p></li>
+<li><p><a class="reference internal" href="#reachability-analysis" id="id9">Reachability analysis</a></p>
+<ul>
+<li><p><a class="reference internal" href="#user-namespaces" id="id10">User namespaces</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#examples" id="id11">Examples</a></p></li>
+<li><p><a class="reference internal" href="#futher-reading" id="id12">Futher reading</a></p></li>
+</ul>
+</div>
+<section id="what-is-a-vulnerability">
+<h2>What is a vulnerability?<a class="headerlink" href="#what-is-a-vulnerability" title="Permalink to this headline">¶</a></h2>
+<p>For the purposes of this document, we consider all bugfixes to be
+potential vulnerabilities. This is because, as stated in
+Documentation/process/cve.rst, whether a bug is exploitable or not
+depends highly on the context (threat model, platform/hardware,
+kernel configuration, boot parameters, runtime configuration,
+connected peripherals, etc.).</p>
+<p>The severity of a bugfix can thus range from being completely benign
+to enabling an attacker to gain complete control over a machine --
+these two conclusions can be reached for the exact same patch depending
+on context it is being considered in.</p>
+<p>Another aspect of this is that a bug may itself not be very serious, but
+serve as a step in a chain of exploits. A common example of this is when
+a kernel pointer is accidentally revealed to userspace, which gives an
+attacker the ability to bypass <a class="reference external" href="https://lwn.net/Articles/569635/">KASLR protections</a>.</p>
+<section id="common-assessment-scenarios">
+<h3>Common assessment scenarios<a class="headerlink" href="#common-assessment-scenarios" title="Permalink to this headline">¶</a></h3>
+<p>In order to share common ground when discussing different attack
+scenarios, we define these four contexts which range from general
+to specific:</p>
+<ol class="arabic simple">
+<li><p><strong>Worst-case scenario</strong> with a minimum of mitigating factors and
+assumptions: driver is enabled, in use, mitigations are disabled or
+ineffective, etc.</p></li>
+<li><p><strong>Common configurations</strong>: assuming kernel defaults, taking into
+account hardware prevalence, etc.</p></li>
+<li><p><strong>Distro-specific configuration</strong> and defaults: This assessment of a
+bugfix takes into account a specific kernel configuration and the
+distro's own assumptions about how the system is configured and
+intended to be used.</p></li>
+<li><p><strong>Specific use case</strong> for a single user or deployment: Here we can make
+precise assumptions about what kernel features are in use and whether
+physical access is possible.</p></li>
+</ol>
+<p>The most interesting scenarios are probably 1 and 3; the worst-case
+scenario is the best we can do for an assessment that is supposed to be
+valid for the entire kernel community, while individual distributions will
+probably want to take their specific kernel configuration and use cases
+into account.</p>
+</section>
+<section id="latent-vulnerabilities">
+<h3>Latent vulnerabilities<a class="headerlink" href="#latent-vulnerabilities" title="Permalink to this headline">¶</a></h3>
+<p>It is worth mentioning the possibility of latent vulnerabilities:
+These are code &quot;defects&quot; which technically cannot be exploited on any
+current hardware, configuration, or scenario, but which should nevertheless
+be fixed since they represent a possible future vulnerability if other
+parts of the code change.</p>
+<p>An example of latent vulnerabilities is the failure to check the return
+value of kmalloc() for small memory allocations: as of early 2024, these
+are <a class="reference external" href="https://lwn.net/Articles/627419/">well-known to never fail in practice</a>
+and are thus not exploitable and not technically vulnerabilities. If this
+rule were to change (because of changes to the memory allocator), then these
+would become true vulnerabilities.</p>
+<p>We recommend that a &quot;worst-case scenario&quot; assessment don't consider latent
+vulnerabilities as actual vulnerabilities since this is a slippery slope
+where eventually all changes can be considered a vulnerability in some sense
+or another; in that case, we've thrown the baby out with the bath water and
+rendered assessment completely useless.</p>
+</section>
+<section id="exploitability-and-unknowns">
+<h3>Exploitability and unknowns<a class="headerlink" href="#exploitability-and-unknowns" title="Permalink to this headline">¶</a></h3>
+<p>Beyond build and runtime configuration, there are many factors that play
+into whether a bug is exploitable in practice. Some of these are very
+subtle and it may be incredibly difficult to prove that a bug is, in fact,
+exploitable -- or reliably exploitable.</p>
+<p>Similarly to latent vulnerabilities, we need to be careful not to throw
+the baby out with the bath water: requiring a full exploit in order to
+deem a bug exploitable is a too high burden of proof and would discount
+many bugs that could be exploitable if enough time and energy was poured
+into exploring it fully.</p>
+<p>Many exploits rely on precise memory layouts of structs and things like
+slab merging (or more generally that certain memory allocation patterns are
+possible) or extremely tight races that look impossible to achieve.</p>
+<p>In the absence of other specific information, we recommend considering the
+bug from a &quot;worst case&quot; point of view, i.e. that it is indeed exploitable.</p>
+</section>
+</section>
+<section id="types-of-bugs">
+<h2>Types of bugs<a class="headerlink" href="#types-of-bugs" title="Permalink to this headline">¶</a></h2>
+<p>There are many ways to classify types of bugs into broad categories. Two
+ways that we'll cover here are in terms of the outcome (i.e. what an
+attacker could do in the worst case) and in terms of the source defect.</p>
+<p>In terms of outcome:</p>
+<ul class="simple">
+<li><p><strong>local DoS</strong> (Denial of Service): a local user is able to crash the
+machine or make it unusable in some way</p></li>
+<li><p><strong>remote DoS</strong>: another machine on the network is able to crash the
+machine or make it unusable in some way</p></li>
+<li><p><strong>local privilege escalation</strong>: a local user is able to become root,
+gain capabilities, or more generally become another user with more
+privileges than the original user</p></li>
+<li><p><strong>kernel code execution</strong>: the attacker is able to run arbitrary code
+in a kernel context; this is largely equivalent to a privilege escalation
+to root</p></li>
+<li><p><strong>information leak</strong>: the attacker is able to obtain sensitive information
+(secret keys, access to another user's memory or processes, etc.)</p></li>
+<li><p><strong>kernel address leak</strong>: a subset of information leaks; this can lead to
+KASLR bypass, usually just one step as part of an exploit chain.</p></li>
+</ul>
+<p>In terms of source defect:</p>
+<ul class="simple">
+<li><p><strong>use after free</strong>: can be exploited by allocating another object in the
+spot that was freed and partially or fully controlling the contents of
+that object; some otherwise illegal values may let you &quot;control&quot; what the
+kernel does (e.g. pointers to other objects or function pointers)</p></li>
+<li><p><strong>heap buffer overflow</strong>: similarly may allow you to overwrite values in
+other objects or read values from unrelated objects</p></li>
+<li><p><strong>stack buffer overflow</strong>: may allow you to overwrite local variables or
+return addresses on the stack; this is pretty well mitigated by the
+compiler these days (CFI, stackprotector, etc.) and may not be as huge a
+concern as it used to be</p></li>
+<li><p><strong>double free</strong>: this may result in general memory corruption, corruption
+of structures used by the memory allocator, or further use after free</p></li>
+<li><p><strong>memory leak</strong>: typically results in DoS if you can make the machine
+completely run out of memory, or potentially trigger some error handling
+code paths</p></li>
+<li><p><strong>reference counting bug</strong>: can result in either a memory leak or a use
+after free (with quite different outcomes in terms of severity)</p></li>
+<li><p><strong>NULL pointer dereference</strong>: this used to be a severe vulnerability
+because <a class="reference external" href="https://lwn.net/Articles/342330/">userspace could mmap() something at address 0 and trick the
+kernel into dereferencing it</a>; this
+is typically relatively harmless these days because the kernel does not
+allow this anymore. Nowadays, a NULL pointer dereference typically just
+results in the kernel killing the offending process; however, in some
+cases the program that crashed may be holding on to various resources
+(such as locks, references) which causes DoS or potentially <a class="reference external" href="https://lwn.net/Articles/914878/">overflow
+things like reference counts</a>.</p></li>
+<li><p><strong>incorrect error handling</strong>: not really a precise bug category by itself
+but can often lead to a number of the other errors listed above (resource
+leaks, double frees, etc.)</p></li>
+<li><p><strong>not checking kmalloc() return values</strong>: a subtype of error handling
+bugs; it is widely believed that <a class="reference external" href="https://lwn.net/Articles/627419/">&quot;small&quot; SLAB allocation requests cannot
+fail</a> and thus do not actually
+represent a security vulnerability</p></li>
+<li><p><strong>logic error</strong>: this is a very general category of errors and potentially
+includes such things as not checking or respecting permissions, bounds,
+or other values supplied by userspace</p></li>
+<li><p><strong>missing or incorrect bounds check</strong>: a subtype of logic errors, this
+often leads to out-of-bounds memory accesses</p></li>
+<li><p><strong>races</strong>: missing or incorrect use of locking, atomics, and memory
+barriers can manifest in many different ways, including many of the
+categories listed above.</p></li>
+</ul>
+<p>A useful rule of thumb is that anything that can cause invalid memory
+dereferences is a potential privilege escalation bug.</p>
+<p>These categories are not perfect and not exhaustive; it is meant to be a
+rough guide covering the most common cases. There is always room to treat
+special cases specially.</p>
+</section>
+<section id="mitigations-and-hardening">
+<h2>Mitigations and hardening<a class="headerlink" href="#mitigations-and-hardening" title="Permalink to this headline">¶</a></h2>
+<p>The kernel comes with a number of options for hardening and mitigating
+the effects of certain types of attacks:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://lwn.net/Articles/569635/">Address-space layout randomization</a></p></li>
+<li><p><a class="reference external" href="https://lwn.net/Articles/584225/">Stack protection</a></p></li>
+<li><p><a class="reference external" href="https://lwn.net/Articles/695991/">Hardened usercopy</a></p></li>
+<li><p><a class="reference external" href="https://lwn.net/Articles/693038/">Reference count hardening</a></p></li>
+<li><p><a class="reference external" href="https://lwn.net/Articles/864521/">Bounds checking (fortify)</a></p></li>
+</ul>
+<p>The purpose of this section is not to recommend certain options be enabled or
+disabled (for that, see the <a class="reference external" href="http://kernsec.org/wiki/index.php/Kernel_Self_Protection_Project/Recommended_Settings">Kernel Self Protection Project's recommended
+settings</a>),
+but to document the fact that many of these options can affect how a
+vulnerability is scored.</p>
+</section>
+<section id="cves-and-cvss-scores-for-the-kernel">
+<h2>CVEs and CVSS scores for the kernel<a class="headerlink" href="#cves-and-cvss-scores-for-the-kernel" title="Permalink to this headline">¶</a></h2>
+<p>CVSS (<a class="reference external" href="https://en.wikipedia.org/wiki/Common_Vulnerability_Scoring_System">Common Vulnerability Scoring System</a>)
+is an open standard for vulnerability scoring and the system which is
+commonly used by Linux distributions and various industry and government
+bodies.</p>
+<p>We won't go into the details of CVSS here, except to give a guide on how
+it could be applied most effectively in the context of the kernel.</p>
+<p><strong>Attack Vector</strong> (Local, Network, Physical):</p>
+<blockquote>
+<div><p>The attack vector for most bugfixes will probably be <strong>Local</strong>, i.e.
+you need a local user account (or more generally user access, e.g. a
+shell account) in order to trigger the buggy code.</p>
+<p>If a networking protocol or device is involved, the attack
+vector may be <strong>Network</strong>. However, many bugs in networking code may
+actually only be locally exploitable, for example bugs that would
+trigger when passing invalid values to a socket-related system call
+(e.g. setsockopt()) or when making system calls in a specific sequence.</p>
+<p>The attack vector <strong>Physical</strong> is used when physical access
+to a machine is required, for example USB device driver bugs that can
+only be exploited by physically inserting a device into a USB port.</p>
+</div></blockquote>
+<p><strong>Attack Complexity</strong> (Low, High):</p>
+<blockquote>
+<div><p>This metric represents roughly how difficult it would be to work around
+security measures like ASLR and how much an exploit would need to be
+tailored to a specific target in order to be successful.</p>
+<p>As a rule of thumb, the less severe outcomes like DoS or information
+leaks often have complexity <strong>Low</strong>, while outcomes like privilege
+escalations and kernel code execution often have complexity <strong>High</strong>.</p>
+</div></blockquote>
+<p><strong>Privileges Required</strong> (None, Low, High):</p>
+<blockquote>
+<div><p>This metric refers to what kind of privileges the attacker must have in
+order to exploit the bug.</p>
+<p>We propose that unauthenticated remote attacks have the value <strong>None</strong>;
+if you can trigger the bug as a local user without any specific
+additional privileges this would be <strong>Low</strong>, and if additional privileges
+are required for the user (such as e.g. <code class="docutils literal notranslate"><span class="pre">CAP_NET_RAW</span></code>) then this would
+be <strong>High</strong>.</p>
+</div></blockquote>
+<p><strong>User Interaction</strong> (None, Required):</p>
+<blockquote>
+<div><p>This will usually have the value <strong>None</strong> unless a successful attack
+requires interaction from another, legitimate user. In that case the
+value will be <strong>Required</strong>; this could be the case e.g. for filesystem
+bugs that require the user to run a command (in this case <code class="docutils literal notranslate"><span class="pre">mount</span></code>)
+in order to trigger the bug.</p>
+</div></blockquote>
+<p><strong>Scope</strong> (Changed, Unchanged):</p>
+<blockquote>
+<div><p>For bugs where privilege escalation or kernel code execution is a
+possible outcome, this will typically be <strong>Changed</strong> (since the kernel
+has access to the whole system), whereas for outcomes like DoS the
+scope will be <strong>Unchanged</strong>. Information leaks can have either value
+depending on whether the information pertains to the original user
+(<strong>Unchanged</strong>) or other users (<strong>Changed</strong>).</p>
+</div></blockquote>
+<p><strong>Confidentiality</strong> (None, Low, High):</p>
+<blockquote>
+<div><p>For privilege escalation or kernel code execution bugs, this will
+typically be <strong>High</strong>; for information leaks this will be <strong>Low</strong>,
+and for DoS this will be <strong>None</strong>.</p>
+</div></blockquote>
+<p><strong>Integrity</strong> (None, Low, High):</p>
+<blockquote>
+<div><p>For privilege escalation or kernel code execution bugs, this will
+typically be <strong>High</strong>; for information leaks this will be <strong>Low</strong>,
+and for DoS this will be <strong>None</strong>.</p>
+</div></blockquote>
+<p><strong>Availability</strong> (None, Low, High):</p>
+<blockquote>
+<div><p>For information leaks this will be <strong>None</strong>, whereas almost all other
+outcomes have a <strong>High</strong> availability impact (a DoS is a loss of
+availability by definition, whereas privilege escalations typically
+allows the attacker to reduce the availability as well).</p>
+</div></blockquote>
+<p>The temporal metrics are optional, but may be useful for kernel patches:</p>
+<p><strong>Exploit Code Maturity</strong>:</p>
+<blockquote>
+<div><p><strong>Unreported</strong> where no reproducer of any kind is known (suitable e.g.
+for fixes based on reports from static checkers) or <strong>POC</strong> if the issue
+has been demonstrated</p>
+</div></blockquote>
+<p><strong>Remediation Level</strong>:</p>
+<blockquote>
+<div><p>This will typically always be <strong>Official Fix</strong> since kernel.org CVEs are
+only assigned once a patch has been published.</p>
+</div></blockquote>
+<p><strong>Report Confidence</strong>:</p>
+<blockquote>
+<div><p>This will be <strong>Unknown</strong> for theoretical issues or issues reported by
+static checkers or <strong>Reasonable</strong> for issues that have been triggered
+by the reporter or author of the patch (as indicated perhaps by a
+stack trace or other error message reproduced in the changelog for the
+patch).</p>
+</div></blockquote>
+<p>To calculate a final CVSS score (value from 0 to 10), use a calculator
+such as <a class="reference external" href="https://www.first.org/cvss/calculator/">https://www.first.org/cvss/calculator/</a> (also includes detailed
+explanations of each metric and its possible values).</p>
+<p>A distro may wish to start by checking whether the file(s) being patched
+are even compiled into their kernel; if not, congrats! You're not vulnerable
+and don't really need to carry out a more detailed analysis.</p>
+<p>For things like loadable modules (e.g. device drivers for obscure hardware)
+and runtime parameters you might have a large segment of users who are not
+vulnerable by default.</p>
+</section>
+<section id="reachability-analysis">
+<h2>Reachability analysis<a class="headerlink" href="#reachability-analysis" title="Permalink to this headline">¶</a></h2>
+<p>One of the most frequent tasks for evaluating a security issue will be to
+figure out how the buggy code can be triggered. Usually this will mean
+starting with the function(s) being patched and working backwards through
+callers to figure out where the code is ultimately called from. Sometimes
+this will be a system call, but may also be timer callbacks, workqueue
+items, interrupt handlers, etc. Tools like <a class="reference external" href="https://en.wikipedia.org/wiki/Cscope">cscope</a>
+(or just plain <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">grep</span></code>) can be used to help untangle these callchains.</p>
+<p>Special care will need to be taken to track function calls made through
+function pointers, especially those stored somewhere on the heap (e.g.
+timer callbacks or pointers to &quot;ops&quot; structs like <code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">super_operations</span></code>).</p>
+<p>While unnesting the call stack, it may be useful to keep track of any
+conditions that need to be satisfied in order to reach the buggy code,
+perhaps especially calls to <code class="docutils literal notranslate"><span class="pre">capable()</span></code> and other capabilities-related
+functions, which may place restrictions on what sort of privileges you
+need to reach the code.</p>
+<section id="user-namespaces">
+<h3>User namespaces<a class="headerlink" href="#user-namespaces" title="Permalink to this headline">¶</a></h3>
+<p>By design, <a class="reference external" href="https://lwn.net/Articles/528078/">user namespaces</a> allow
+non-root processes to behave as if they are root for an isolated part
+of the system. Some important things to be aware of in this respect are:</p>
+<ul class="simple">
+<li><p>User namespaces (in combination with mount namespaces) allow a
+regular user to mount certain filesystems (proc, sys, and others);
+see <a class="reference external" href="https://man7.org/linux/man-pages/man7/user_namespaces.7.html">https://man7.org/linux/man-pages/man7/user_namespaces.7.html</a>
+for more information.</p></li>
+<li><p>User namespaces (perhaps in combination with network namespaces)
+allow a regular user to create sockets for network protocols they
+would otherwise not be able to access; see
+<a class="reference external" href="https://lwn.net/Articles/740455/">https://lwn.net/Articles/740455/</a> for more information.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">capable()</span></code> checks capabilities in the initial user namespace,
+whereas <code class="docutils literal notranslate"><span class="pre">ns_capable()</span></code> checks capabilities in the current user
+namespace.</p></li>
+</ul>
+</section>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h2>
+<p>In the following examples, we give scores from a &quot;worst case&quot; context,
+i.e. assuming the hardware/platform is in use, the driver is compiled
+in, mitigations are disabled or otherwise ineffective, etc.</p>
+<p><strong><a class="reference external" href="https://git.kernel.org/torvalds/c/72d9b9747e78">Commit 72d9b9747e78 (&quot;ACPI: extlog: fix NULL pointer dereference check&quot;)</a></strong>:</p>
+<blockquote>
+<div><p>The first thing to notice is that the code here is in an <code class="docutils literal notranslate"><span class="pre">__exit</span></code>
+function, meaning that it can only run when the module is unloaded
+(the <code class="docutils literal notranslate"><span class="pre">mod-&gt;exit()</span></code> call in the delete_module() system call) --
+inspecting this function reveals that it is restricted to processes
+with the <code class="docutils literal notranslate"><span class="pre">CAP_SYS_MODULE</span></code> capability, meaning you already need
+quite high privileges to trigger the bug.</p>
+<p>The bug itself is that a pointer is dereferenced before it has been
+checked to be non-NULL. Without deeper analysis we can't really know
+whether it is even possible for the pointer to be NULL at this point,
+although the presence of a check is a good indication that it may be.
+By grepping for <code class="docutils literal notranslate"><span class="pre">extlog_l1_addr</span></code>, we see that it is assigned in the
+corresponding module_init() function and moreover that the only way
+it can be NULL is if the module failed to load in the first place.
+Since module_exit() functions are not called on module_init() failure
+we can conclude that this is not a vulnerability.</p>
+</div></blockquote>
+<p><strong><a class="reference external" href="https://git.kernel.org/torvalds/c/27e56f59bab5">Commit 27e56f59bab5 (&quot;UBSAN: array-index-out-of-bounds in dtSplitRoot&quot;)</a></strong>:</p>
+<blockquote>
+<div><p>Right away we notice that this is a filesystem bug in jfs. There is a
+stack trace showing that the code is coming from the mkdirat() system
+call. This means you can likely trigger this as a regular user, given
+that a suitable jfs filesystem has been mounted. Since this is a bug
+found by syzkaller, we can follow the link in the changelog and find
+the reproducer. By looking at the reproducer we can see that it almost
+certainly mounts a corrupted filesystem image.</p>
+<p>When filesystems are involved, the most common scenario is probably
+when a user has privileges to mount filesystem images in the context
+of a desktop environment that allows the logged-in user to mount
+attached USB drives, for example. In this case, physical access would
+also be necessary, which would make this Attack Vector <strong>Physical</strong>
+and User Interaction <strong>Required</strong>.</p>
+<p>Another scenario is where a malicious filesystem image is passed to a
+legitimate user who then unwittingly mounts it and runs
+mkdir()/mkdirat() to trigger the bug. This would clearly be User
+Interaction <strong>Required</strong>, but it's not so clear what the Attack Vector
+would be -- let's call it <strong>Physical</strong>, which is the least severe of
+the options given to us by CVSS, even though it's not a true physical
+attack.</p>
+<p>This is an out-of-bounds memory access, so without doing a much deeper
+analysis we should assume it could potentially lead to privilege
+escalation, so Scope <strong>Changed</strong>, Confidentiality <strong>High</strong>, Integrity
+<strong>High</strong>, and Availability <strong>High</strong>.</p>
+<p>Since regular users can't normally mount arbitrary filesystems, we can
+set Attack Complexity <strong>High</strong> and Privileges <strong>Required</strong>.</p>
+<p>If we also set Exploit Code Maturity <strong>Unproven</strong>, we end up with the
+following CVSSv3.1 vector:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://www.first.org/cvss/calculator/3.1#CVSS:3.1/AV:P/AC:H/PR:H/UI:R/S:C/C:H/I:H/A:H/E:U">CVSS:3.1/AV:P/AC:H/PR:H/UI:R/S:C/C:H/I:H/A:H/E:U</a> (6.2 - Medium)</p></li>
+</ul>
+<p>If this score seems high, keep in mind that this is a worst case
+scenario. In a more specific scenario, jfs might be disabled in the
+kernel config or there is no way for non-root users to mount any
+filesystem.</p>
+</div></blockquote>
+<p><strong><a class="reference external" href="https://git.kernel.org/torvalds/c/b988b1bb0053">Commit b988b1bb0053 (&quot;KVM: s390: fix setting of fpc register&quot;)</a></strong>:</p>
+<blockquote>
+<div><p>From the changelog: &quot;corruption of the fpc register of the host process&quot;
+and &quot;the host process will incorrectly continue to run with the value
+that was supposed to be used for a guest cpu&quot;.</p>
+<p>This makes it clear that a guest can partially take control of the
+host process (presumably the host process running the KVM), which would
+be a privilege escalation of sorts -- however, since this is corruption
+of floating-point registers and not a memory error, it is highly
+unlikely to be exploitable beyond DoS in practice (even then, it is
+questionable whether the DoS impacts anything beyond the KVM process
+itself).</p>
+<p>Because an attack would be difficult to pull off, we propose Attack
+Complexity <strong>High</strong>, and because there isn't a clear or likely path to
+anything beyond DoS, we'll select Confidentiality <strong>None</strong>, Integrity
+<strong>Low</strong> and Availability <strong>Low</strong>.</p>
+<p>We suggest the following CVSSv3.1 vector:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://www.first.org/cvss/calculator/3.1#CVSS:3.1/AV:L/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:L/E:U">CVSS:3.1/AV:L/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:L/E:U</a> (3.7 - Low)</p></li>
+</ul>
+</div></blockquote>
+</section>
+<section id="futher-reading">
+<h2>Futher reading<a class="headerlink" href="#futher-reading" title="Permalink to this headline">¶</a></h2>
+<p>Different vendors have other/different rating and classification systems
+for vulnerabilities and severities:</p>
+<ul class="simple">
+<li><p>Microsoft: <a class="reference external" href="https://www.microsoft.com/en-us/msrc/security-update-severity-rating-system">https://www.microsoft.com/en-us/msrc/security-update-severity-rating-system</a></p></li>
+<li><p>Red Hat: <a class="reference external" href="https://access.redhat.com/security/updates/classification">https://access.redhat.com/security/updates/classification</a></p></li>
+<li><p>Google: <a class="reference external" href="https://cloud.google.com/security-command-center/docs/finding-severity-classifications#severity_classifications">https://cloud.google.com/security-command-center/docs/finding-severity-classifications#severity_classifications</a></p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &copy;The kernel development community.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.3.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/security-assessment.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
